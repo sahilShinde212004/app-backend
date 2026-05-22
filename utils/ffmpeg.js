@@ -1,5 +1,6 @@
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const { Readable } = require('stream');
 const path = require('path');
 
 // Set ffmpeg path
@@ -15,7 +16,10 @@ function convertToMp3(inputBuffer, inputFormat = 'aac') {
   return new Promise((resolve, reject) => {
     const chunks = [];
 
-    ffmpeg(inputBuffer)
+    // Create a readable stream from the buffer
+    const inputStream = Readable.from(inputBuffer);
+
+    ffmpeg(inputStream)
       .inputFormat(inputFormat)
       .toFormat('mp3')
       .audioBitrate('192k')
