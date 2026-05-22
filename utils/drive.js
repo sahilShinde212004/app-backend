@@ -84,7 +84,7 @@ async function uploadToDrive(fileBuffer, fileName, mimeType, className, subjectN
 
   const file = await drive.files.create({
     resource: { name: fileName, parents: [subjectFolderId] },
-    media: { mimeType: mimeType || 'audio/webm', body: Readable.from(fileBuffer) },
+    media: { mimeType: mimeType || 'audio/wav', body: Readable.from(fileBuffer) },
     fields: 'id, name, webViewLink',
   });
 

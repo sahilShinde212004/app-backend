@@ -2,6 +2,7 @@ const express  = require('express');
 const multer   = require('multer');
 const jwt      = require('jsonwebtoken');
 const { uploadToCloudinary } = require('../utils/cloudinary');
+const { convertToMp3 } = require('../utils/ffmpeg');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -33,7 +34,11 @@ router.post('/upload-lecture', authMiddleware, upload.single('audio'), async (re
       return res.status(400).json({ error: 'Missing audio file, className, or subjectName' });
     }
 
-    const result = await uploadToCloudinary(file.buffer, className, subjectName);
+    // Convert audio to MP3 format
+    console.log('[Upload] Converting audio to MP3...');
+    const mp3Buffer = await convertToMp3(file.buffer);
+
+    const result = await uploadToCloudinary(mp3Buffer, className, subjectName);
     res.json({ success: true, url: result.secure_url, publicId: result.public_id });
   } catch (err) {
     console.error('[Upload] Error:', err.message);

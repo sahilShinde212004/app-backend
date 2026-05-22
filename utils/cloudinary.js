@@ -24,7 +24,7 @@ async function uploadToCloudinary(fileBuffer, className, subjectName) {
         resource_type: 'video', // audio files use 'video' type in Cloudinary
         public_id: publicId,
         overwrite: false,
-        format: 'webm',
+        format: 'wav',
       },
       (error, result) => {
         if (error) {
