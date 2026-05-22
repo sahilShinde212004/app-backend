@@ -9,7 +9,7 @@ const uploadRoutes = require('./routes/upload');
 
 const app = express();
 
-// CORS configuration
+// CORS 
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
