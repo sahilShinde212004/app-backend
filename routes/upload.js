@@ -34,9 +34,17 @@ router.post('/upload-lecture', authMiddleware, upload.single('audio'), async (re
       return res.status(400).json({ error: 'Missing audio file, className, or subjectName' });
     }
 
+    // Detect input format from MIME type
+    const mimeType = file.mimetype || '';
+    let inputFormat = 'aac'; // default
+    if (mimeType.includes('wav')) inputFormat = 'wav';
+    else if (mimeType.includes('mp3')) inputFormat = 'mp3';
+    else if (mimeType.includes('m4a')) inputFormat = 'aac';
+    else if (mimeType.includes('ogg')) inputFormat = 'ogg';
+
     // Convert audio to MP3 format
-    console.log('[Upload] Converting audio to MP3...');
-    const mp3Buffer = await convertToMp3(file.buffer);
+    console.log(`[Upload] Converting audio to MP3 (input format: ${inputFormat})...`);
+    const mp3Buffer = await convertToMp3(file.buffer, inputFormat);
 
     const result = await uploadToCloudinary(mp3Buffer, className, subjectName);
     res.json({ success: true, url: result.secure_url, publicId: result.public_id });
