@@ -13,8 +13,11 @@ cloudinary.config({
 async function uploadToCloudinary(fileBuffer, className, subjectName) {
   const dateStr = new Date().toISOString().split('T')[0];
   const timestamp = Date.now();
-  const folder = `${dateStr}/${className}/${subjectName}`;
-  const publicId = `${folder}/Lecture-${timestamp}`;
+  // Trim to prevent Cloudinary "public_id must not end with whitespace" errors
+  const safeClass   = (className   || 'General').trim().replace(/\s+/g, '_');
+  const safeSubject = (subjectName || 'Subject').trim().replace(/\s+/g, '_');
+  const folder    = `${dateStr}/${safeClass}/${safeSubject}`;
+  const publicId  = `${folder}/Lecture-${timestamp}`;
 
   console.log(`[Cloudinary] Uploading to: ${publicId}`);
 
