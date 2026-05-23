@@ -96,9 +96,26 @@ router.post('/', authMiddleware, async (req, res) => {
       fileSize: fileSize || 0,
       duration: duration || 0,
       lectureNumber: lectureNumber || 0,
-      status: 'completed', // Since videoPath is provided from Cloudinary
+      status: 'uploaded',
       isPublished: false
     }).save();
+
+    // Fire-and-forget: notify the Python processing server with filename & lecture_id
+    const pythonServerUrl = process.env.PYTHON_SERVER_URL || 'http://localhost:8000';
+    const filename = (lecture.videoPath || '').split('/').pop(); // e.g. "Lecture-1779447189109.wav"
+    fetch(`${pythonServerUrl}/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename:   filename,
+        lecture_id: lecture._id.toString()
+      })
+    })
+      .then(r => r.ok
+        ? console.log(`[Lectures] ✅ Processing triggered — filename: ${filename}, lecture_id: ${lecture._id}`)
+        : r.text().then(t => console.warn(`[Lectures] ⚠️ Processing server responded with ${r.status}: ${t}`))
+      )
+      .catch(err => console.warn(`[Lectures] ⚠️ Could not reach processing server: ${err.message}`));
 
     res.status(201).json({
       message: 'Lecture created successfully',
