@@ -44,6 +44,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/fyp-app')
 // Register routes
 app.use('/api/auth', authRoutes);
 app.use('/api', uploadRoutes);
+app.use('/api/lectures', lectureRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;
