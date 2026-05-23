@@ -5,27 +5,7 @@ const User     = require('../models/User');
 
 const router = express.Router();
 
-// POST /api/auth/signup
-router.post('/signup', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ error: 'User already exists' });
-
-    const hashed = await bcrypt.hash(password, 10);
-    const user   = await new User({ name, email, password: hashed }).save();
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
-    res.status(201).json({ token, user: { id: user._id, name: user.name, email: user.email } });
-  } catch (err) {
-    console.error('[Auth] Signup error:', err.message);
-    res.status(500).json({ error: 'Server error during signup' });
-  }
-});
-
-// POST /api/auth/login
+// POST /api/auth/login — Teacher Login Only
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -34,18 +14,40 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
+    // Only teachers can login
+    if (!['teacher', 'pending_teacher', 'admin'].includes(user.role)) {
+      return res.status(403).json({ error: 'Only teachers can access this application' });
+    }
+
+    if (!user.isActive) return res.status(403).json({ error: 'Account is inactive' });
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
 
+    // Update lastLogin timestamp
+    user.lastLogin = new Date();
+    await user.save();
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+        departmentId: user.departmentId
+      }
+    });
   } catch (err) {
     console.error('[Auth] Login error:', err.message);
     res.status(500).json({ error: 'Server error during login' });
   }
 });
 
-// GET /api/auth/me  — verify token & return current user
+// GET /api/auth/me — verify token & return current user
 router.get('/me', async (req, res) => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -55,8 +57,75 @@ router.get('/me', async (req, res) => {
     const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET || 'secret');
     const user = await User.findById(decoded.id).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    // Enforce teacher-only access
+    if (!['teacher', 'pending_teacher', 'admin'].includes(user.role)) {
+      return res.status(403).json({ error: 'Only teachers can access this application' });
+    }
+
+    if (!user.isActive) return res.status(403).json({ error: 'Account is inactive' });
     res.json({ user });
-  } catch {
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// GET /api/auth/users/:id — Get user profile (requires auth)
+router.get('/users/:id', async (req, res) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET || 'secret');
+    
+    // Verify requester is a teacher
+    const requester = await User.findById(decoded.id);
+    if (!['teacher', 'pending_teacher', 'admin'].includes(requester.role)) {
+      return res.status(403).json({ error: 'Only teachers can access this application' });
+    }
+
+    const user = await User.findById(req.params.id).select('-password').populate('departmentId', 'name code');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// PUT /api/auth/profile — Update user profile (requires auth)
+router.put('/profile', async (req, res) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  try {
+    const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET || 'secret');
+    
+    // Verify requester is a teacher
+    const requester = await User.findById(decoded.id);
+    if (!['teacher', 'pending_teacher', 'admin'].includes(requester.role)) {
+      return res.status(403).json({ error: 'Only teachers can access this application' });
+    }
+
+    const { firstName, lastName, phone, bio, avatar } = req.body;
+    
+    const user = await User.findByIdAndUpdate(
+      decoded.id,
+      {
+        ...(firstName && { firstName }),
+        ...(lastName && { lastName }),
+        ...(phone && { phone }),
+        ...(bio && { bio }),
+        ...(avatar && { avatar })
+      },
+      { new: true }
+    ).select('-password');
+
+    res.json({ user });
+  } catch (err) {
+    console.error('[Auth] Profile update error:', err.message);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 });
