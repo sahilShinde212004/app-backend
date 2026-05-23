@@ -6,6 +6,7 @@ const cors     = require('cors');
 // Import routes
 const authRoutes   = require('./routes/auth');
 const uploadRoutes = require('./routes/upload');
+const lectureRoutes = require('./routes/lectures');
 
 const app = express();
 
