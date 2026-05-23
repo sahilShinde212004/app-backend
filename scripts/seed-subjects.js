@@ -6,7 +6,7 @@ const SubjectTeacher = require('../models/SubjectTeacher');
 
 async function seedSubjectsAndTeachers() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/fyp-app');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://fayazkhanxid411:9a2RotpFMaCBxCji@cluster0.45kxbus.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/educonnect');
     console.log('✅ Connected to MongoDB');
 
     // Find John Smith (teacher from seed-teachers.js)

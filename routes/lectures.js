@@ -4,6 +4,8 @@ const Lecture = require('../models/Lecture');
 const SubjectTeacher = require('../models/SubjectTeacher');
 const Subject = require('../models/Subject');
 const User = require('../models/User');
+const CourseSubject = require('../models/CourseSubject');
+const Classroom = require('../models/Classroom');
 
 const router = express.Router();
 
