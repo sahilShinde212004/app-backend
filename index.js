@@ -18,6 +18,7 @@ const corsOptions = {
       'http://localhost:3000',  // Alternative frontend port
       'http://localhost:5000',  // Same origin
       'http://localhost:8081', // For testing with tools like Postman
+      
       process.env.FRONTEND_URL  // Environment variable for production
     ].filter(Boolean);
 

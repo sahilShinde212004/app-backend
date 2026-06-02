@@ -101,7 +101,7 @@ router.post('/', authMiddleware, async (req, res) => {
     }).save();
 
     // Fire-and-forget: notify the Python processing server with filename & lecture_id
-    const pythonServerUrl = process.env.PYTHON_SERVER_URL || 'http://localhost:8000';
+    const pythonServerUrl = 'https://bunion-transpose-tinkling.ngrok-free.dev';
     const filename = (lecture.videoPath || '').split('/').pop(); // e.g. "Lecture-1779447189109.wav"
     fetch(`${pythonServerUrl}/process`, {
       method: 'POST',
