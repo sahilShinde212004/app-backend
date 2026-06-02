@@ -3,6 +3,8 @@ const multer   = require('multer');
 const jwt      = require('jsonwebtoken');
 const { uploadToCloudinary } = require('../utils/cloudinary');
 const { convertToMp3 } = require('../utils/ffmpeg');
+const Lecture = require('../models/Lecture');
+const SubjectTeacher = require('../models/SubjectTeacher');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -59,71 +61,78 @@ function authMiddleware(req, res, next) {
 }
 
 // POST /api/upload-lecture
+// Expected body fields: audio (file), subjectId, title, description (opt), lectureNumber (opt)
 router.post('/upload-lecture', authMiddleware, upload.single('audio'), async (req, res) => {
-  console.log(`[Upload] User ${req.userId}: ${req.body.className} / ${req.body.subjectName}`);
   try {
-    const { className, subjectName } = req.body;
+    const { subjectId, title, description, lectureNumber } = req.body;
     const file = req.file;
 
-    if (!file || !className || !subjectName) {
-      return res.status(400).json({ error: 'Missing audio file, className, or subjectName' });
+    if (!file || !subjectId || !title) {
+      return res.status(400).json({ error: 'Missing audio file, subjectId, or title' });
+    }
+
+    // Verify teacher is assigned to this subject
+    const subjectTeacher = await SubjectTeacher.findOne({ subjectId, userId: req.userId });
+    if (!subjectTeacher) {
+      return res.status(403).json({ error: 'You are not assigned to this subject' });
     }
 
     console.log(`[Upload] File received - MIME: ${file.mimetype}, Size: ${file.size} bytes`);
 
-    // Detect audio format from magic bytes
+    // Detect format, convert to MP3, upload to Cloudinary
     const detectedFormat = detectAudioFormat(file.buffer);
-    console.log(`[Upload] Detected audio format: ${detectedFormat}`);
-
-    // Convert audio to MP3 format
-    console.log('[Upload] Converting audio to MP3...');
     const mp3Buffer = await convertToMp3(file.buffer, detectedFormat);
+    const result = await uploadToCloudinary(mp3Buffer, subjectId, title);
+    console.log(`[Upload] ✅ Cloudinary URL: ${result.secure_url}`);
 
-    console.log(`[Upload] MP3 conversion successful (${mp3Buffer.length} bytes)`);
-    
-    const result = await uploadToCloudinary(mp3Buffer, className, subjectName);
-    console.log(`[Upload] ✅ Uploaded to Cloudinary - URL: ${result.secure_url}`);
-    
-    // Trigger Python processing server immediately after upload
-    const pythonServerUrl = 'https://bunion-transpose-tinkling.ngrok-free.dev';
-    const filename = result.secure_url.split('/').pop(); // Extract filename from URL
-    
-    console.log(`[Upload] 📤 Notifying Python server...`);
-    console.log(`   URL: ${pythonServerUrl}/process`);
-    console.log(`   Filename: ${filename}`);
-    
+    // Create lecture record in DB now that we have the Cloudinary URL
+    const lecture = await new Lecture({
+      subjectId,
+      title,
+      description: description || null,
+      createdBy: req.userId,
+      videoPath: result.secure_url,
+      fileSize: file.size,
+      lectureNumber: lectureNumber || 0,
+      status: 'processing'
+    }).save();
+
+    console.log(`[Upload] ✅ Lecture saved - ID: ${lecture._id}`);
+
+    // Notify Python server with real lecture ID
+    const pythonServerUrl = process.env.PYTHON_SERVER_URL || 'https://bunion-transpose-tinkling.ngrok-free.dev';
     try {
-      const requestBody = {
-        filename: filename,
-        lecture_id: 'pending'  // No lecture ID yet; will be created by frontend
-      };
-      console.log(`[Upload] 📮 Request body:`, JSON.stringify(requestBody));
-      
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
       const pythonResponse = await fetch(`${pythonServerUrl}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          lecture_id: lecture._id.toString(),
+          audio_url: result.secure_url,
+          filename: result.secure_url.split('/').pop()
+        }),
         signal: controller.signal
       });
-      
+
       clearTimeout(timeout);
-      console.log(`[Upload] 📬 Python server responded with status: ${pythonResponse.status}`);
-      
-      if (pythonResponse.ok) {
-        console.log(`[Upload] ✅ Processing triggered on Python server`);
-      } else {
-        const responseText = await pythonResponse.text();
-        console.warn(`[Upload] ⚠️ Python server responded with ${pythonResponse.status}: ${responseText}`);
-      }
+      console.log(`[Upload] Python server status: ${pythonResponse.status}`);
     } catch (err) {
-      console.error(`[Upload] ❌ Could not reach Python server:`, err.message);
-      // Don't fail the upload if Python server is unreachable - still return the Cloudinary URL
+      console.error(`[Upload] ❌ Python server unreachable:`, err.message);
+      // Don't fail — lecture is already saved
     }
-    
-    res.json({ success: true, url: result.secure_url, publicId: result.public_id });
+
+    res.status(201).json({
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id,
+      lecture: {
+        id: lecture._id,
+        title: lecture.title,
+        status: lecture.status
+      }
+    });
   } catch (err) {
     console.error('[Upload] Error:', err.message);
     res.status(500).json({ error: err.message || 'Upload failed' });
