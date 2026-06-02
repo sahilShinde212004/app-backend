@@ -82,6 +82,47 @@ router.post('/upload-lecture', authMiddleware, upload.single('audio'), async (re
     console.log(`[Upload] MP3 conversion successful (${mp3Buffer.length} bytes)`);
     
     const result = await uploadToCloudinary(mp3Buffer, className, subjectName);
+    console.log(`[Upload] ✅ Uploaded to Cloudinary - URL: ${result.secure_url}`);
+    
+    // Trigger Python processing server immediately after upload
+    const pythonServerUrl = 'https://bunion-transpose-tinkling.ngrok-free.dev';
+    const filename = result.secure_url.split('/').pop(); // Extract filename from URL
+    
+    console.log(`[Upload] 📤 Notifying Python server...`);
+    console.log(`   URL: ${pythonServerUrl}/process`);
+    console.log(`   Filename: ${filename}`);
+    
+    try {
+      const requestBody = {
+        filename: filename,
+        lecture_id: 'pending'  // No lecture ID yet; will be created by frontend
+      };
+      console.log(`[Upload] 📮 Request body:`, JSON.stringify(requestBody));
+      
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      const pythonResponse = await fetch(`${pythonServerUrl}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeout);
+      console.log(`[Upload] 📬 Python server responded with status: ${pythonResponse.status}`);
+      
+      if (pythonResponse.ok) {
+        console.log(`[Upload] ✅ Processing triggered on Python server`);
+      } else {
+        const responseText = await pythonResponse.text();
+        console.warn(`[Upload] ⚠️ Python server responded with ${pythonResponse.status}: ${responseText}`);
+      }
+    } catch (err) {
+      console.error(`[Upload] ❌ Could not reach Python server:`, err.message);
+      // Don't fail the upload if Python server is unreachable - still return the Cloudinary URL
+    }
+    
     res.json({ success: true, url: result.secure_url, publicId: result.public_id });
   } catch (err) {
     console.error('[Upload] Error:', err.message);

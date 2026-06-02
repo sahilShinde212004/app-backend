@@ -100,23 +100,8 @@ router.post('/', authMiddleware, async (req, res) => {
       isPublished: false
     }).save();
 
-    // Fire-and-forget: notify the Python processing server with filename & lecture_id
-    const pythonServerUrl = 'https://bunion-transpose-tinkling.ngrok-free.dev';
-    const filename = (lecture.videoPath || '').split('/').pop(); // e.g. "Lecture-1779447189109.wav"
-    console.log(`[Lectures] 📤 Sending request to Python server - URL: ${pythonServerUrl}/process, filename: ${filename}, lecture_id: ${lecture._id}`);
-    fetch(`${pythonServerUrl}/process`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename:   filename,
-        lecture_id: lecture._id.toString()
-      })
-    })
-      .then(r => r.ok
-        ? console.log(`[Lectures] ✅ Processing triggered — filename: ${filename}, lecture_id: ${lecture._id}`)
-        : r.text().then(t => console.warn(`[Lectures] ⚠️ Processing server responded with ${r.status}: ${t}`))
-      )
-      .catch(err => console.warn(`[Lectures] ⚠️ Could not reach processing server: ${err.message}`));
+    console.log(`[Lectures] ✅ Lecture saved - ID: ${lecture._id}, videoPath: ${lecture.videoPath}`);
+    console.log(`[Lectures] 📝 NOTE: Python server was already triggered during upload`);
 
     res.status(201).json({
       message: 'Lecture created successfully',
